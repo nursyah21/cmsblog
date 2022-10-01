@@ -79,3 +79,13 @@ npm run dev
 don't forget to fill [.env](.env) based on your supabase
 
 you can also delete unnecessary feature like hidroponik, just hidden it
+
+
+screenshot website:
+![alt](public/readme/ss1.png)
+
+![alt](public/readme/ss2.png)
+
+![alt](public/readme/ss3.png)
+
+![alt](public/readme/ss4.png)

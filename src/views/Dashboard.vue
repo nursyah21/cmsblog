@@ -12,16 +12,18 @@ export default{
 },
   mounted(){
     this.autologin()
+    this.refreshHidroponik()
+    this.realtimeHidroponik()    
   },
   data(){
     return{
       login: false,
       loading:false,
       loadingStatus:'',
+      refreshStatus:'refresh',
       nav:[
         {page: 'Home', active:true},
         {page: 'Blog', active:false},
-        {page: 'Shop', active:false},
         {page: 'Comment', active:false}
       ],
       hidroponik:{
@@ -35,7 +37,6 @@ export default{
       stats:{
         blog: true,
         comment: false,
-        shop: false,
       },
       blog:{
         title:'',
@@ -45,24 +46,15 @@ export default{
         deleteModal:false,
         list: [],
         listIdx: 0,
-        lengthlist: 100
-      },
-      shop:{
-        title:"",
-        price:"",
-        link:"",
-        img:"",
-        fail:"",
-        list:[],
-        listIdx: 0,
-        lengthlist: 100,
-        deleteModal: false,
-        deleteProduct: ''
+        lengthlist: 50,
+        submit:'submit',
+        blog_id:'',
+        old_url:''
       },
       comment:{
         list:[],
         listIdx: 0,
-        lengthlist: 1,
+        lengthlist: 50,
         deleteModal: false,
         deleteMessage: '',
         deleteMessageID: ''
@@ -133,14 +125,9 @@ export default{
         new FroalaEditor('textarea');
         this.blog.list = []
         const blog = await supabase.from('blog').select('blog_id, title, views, release, link').order('blog_id', {ascending:false}).then(e=>e.data)
-        blog.forEach(e=>this.blog.list.push(e))
+        if(blog != null)blog.forEach(e=>this.blog.list.push(e))
       }
-      if(this.nav[2].active){ //shop
-        this.shop.list = []
-        const shop = await supabase.from('shop').select().then(e=>e.data)
-        shop.forEach(e=>this.shop.list.push(e))
-      }
-      if(this.nav[3].active){ //comment
+      if(this.nav[2].active){ //comment
         this.comment.list = []
         const comment = await supabase.from('comment').select().order('comment_id',{ascending:false}).then(e=>e.data)
         comment.forEach(e=>this.comment.list.push(e))
@@ -153,15 +140,23 @@ export default{
       localStorage.clear()
       window.location.reload()
     },
-    async submitContent(){ //post blog
+    async submitContent(stats){ //post blog
       if(this.blog.title == '') return this.blog.postfail = "title can't empty"
       if(document.querySelector('.fr-element.fr-view').innerHTML == "<p><br></p>") return this.blog.postfail = "content can't empty"
 
       this.loading = true
       this.loadingStatus = 'upload blog'
-      const status = await utils.insertblog(this.blog.title)
-      
-      if(status != '' && !(this.loading = false))return this.blog.postfail = status
+      if(stats == 'update'){
+        const status = await utils.updateblog(this.blog.blog_id, this.blog.title, this.blog.old_url)
+        if(status != '' && !(this.loading = false))return this.blog.postfail = status
+        this.blog.blog_id = ''
+        this.blog.old_url = ''
+        this.blog.submit = 'submit'
+      }else{
+        console.log('submit')
+        const status = await utils.insertblog(this.blog.title)
+        if(status != '' && !(this.loading = false))return this.blog.postfail = status
+      }
       
       this.loadingStatus = ''
       this.blog.postfail = ''
@@ -175,57 +170,15 @@ export default{
       if(this.hidroponik.ppm < 0 || this.hidroponik.ppm > 1500)return this.hidroponik.ppmvalid = false
       
       this.loading = true
+      await this.refreshHidroponik()
       await this.genCharts()
+      this.refreshStatus = 'refresh'
       this.loading = false
-    },
-    async uploadshop(){
-      let status = ""
-      if(this.shop.title.trim() == '') status = "title, "
-      if(this.shop.price.trim() == '') status += "price, "
-      if(this.shop.link.trim() == '' )status += "link, "
-      if(this.$refs.imgshop.src == window.location) status += "image"
-      if(status != '') return this.shop.fail = `${status} can't be empty`
-      
-      this.shop.fail = ''
-      if(!new RegExp(/https?:\/\/\.*/).test(this.shop.link))return this.shop.fail = 'link not valid'
-
-      this.loading = true
-
-      let checkTitle = await supabase.from('shop').select().match({name:this.shop.title}).then(e=>e.data)
-      if (checkTitle?.length != 0 && !(this.loading = false)) return this.shop.fail = 'product already exists'
-      
-      try{
-        await supabase.storage.from('public').upload(`${this.shop.img.name}`, this.shop.img)
-      }catch(e){}
-      // if(error && !(this.loading = false)) return this.shop.fail = 'upload image error,'
-      
-      this.loading = true
-      this.loadingStatus = 'upload data shop'
-      const result = await this.uploadDataShop()
-      this.loadingStatus = ''
-      this.loading = false
-      if(result != '') return this.shop.fail = 'upload data fail'
-      this.move(2)
-    },
-    async uploadDataShop(){
-
-      const datas = {
-        name: this.shop.title,
-        price: this.shop.price,
-        img_url:`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/public/${this.shop.img.name}`,
-        url: this.shop.link
-      }
-      
-      const {error} = await supabase.from('shop').insert(datas)
-      return (error)? error: ''
-    },
-    uploadimgshop(e){
-      this.shop.img = e.target.files[0]
-      this.$refs.imgshop.src = URL.createObjectURL(this.shop.img)
     },
     pompaActivated(idx){
       if(this.hidroponik.mode)return
       this.hidroponik.pompa[idx] = ! this.hidroponik.pompa[idx]
+      this.refreshStatus = 'async'
     },
     async removeBlog(idx,url){
       if(idx==null){
@@ -249,23 +202,6 @@ export default{
         this.blog.deleteModal = true
       }
     },
-    async removeShop(idx){
-      if(idx==null){
-        this.shop.deleteModal = false
-        this.loading = true
-        this.loadingStatus = `delete ${this.shop.deleteProduct}`
-
-        const {error} = await supabase.from('shop').delete().match({name: this.shop.deleteProduct})
-        if(error) console.log(error)
-        this.loadingStatus = ''
-        this.loading = false
-
-        this.move(2)
-      }else{
-        this.shop.deleteProduct = idx
-        this.shop.deleteModal = true
-      }
-    },
     async removeComment(idx, id){
       if(idx == null){
         console.log(this.comment.deleteMessageID)
@@ -279,13 +215,83 @@ export default{
         this.loadingStatus = ''
         this.loading = false
 
-        this.move(3)
+        this.move(2)
       }else{
         this.comment.deleteMessage = idx
         this.comment.deleteMessageID = id
         this.comment.deleteModal = true
       }
     },
+    async refreshHidroponik(){
+      if(this.refreshStatus == 'async'){
+        const data = {
+          tangki1: this.hidroponik.ultrasonik[0],
+          tangki2: this.hidroponik.ultrasonik[1],
+          tangki3: this.hidroponik.ultrasonik[2],
+          tds: this.hidroponik.tds,
+          ppm: this.hidroponik.ppm,
+          auto: this.hidroponik.mode,
+          pompa1: this.hidroponik.pompa[0],
+          pompa2: this.hidroponik.pompa[1],
+          pompa3: this.hidroponik.pompa[2],
+          pompa4: this.hidroponik.pompa[3]
+        }
+
+        let error = await supabase.from('hidroponik').update(data).match({'id_hidroponik':1}).then(e=>e.error)
+        if(error)console.log(error)
+        return 
+      }
+      const {data} = await supabase.from('hidroponik').select().match({'id_hidroponik':1})
+
+      data.forEach(e=>{
+        this.hidroponik.ultrasonik[0] = e.tangki1
+        this.hidroponik.ultrasonik[1] = e.tangki2
+        this.hidroponik.ultrasonik[2] = e.tangki3
+        this.hidroponik.tds = e.tds
+        this.hidroponik.ppm = e.ppm
+        this.hidroponik.mode = e.auto
+        this.hidroponik.pompa[0] = e.pompa1
+        this.hidroponik.pompa[1] = e.pompa2
+        this.hidroponik.pompa[2] = e.pompa3
+        this.hidroponik.pompa[3] = e.pompa4
+      })
+    },
+    realtimeHidroponik (){
+      supabase.from('hidroponik').on('UPDATE', async (payload)=>{
+        
+        console.log('update', payload)
+        const {data} = await supabase.from('hidroponik').select().match({'id_hidroponik':1})
+
+        data.forEach(e=>{
+          this.hidroponik.ultrasonik[0] = e.tangki1
+          this.hidroponik.ultrasonik[1] = e.tangki2
+          this.hidroponik.ultrasonik[2] = e.tangki3
+          this.hidroponik.tds = e.tds
+          this.hidroponik.ppm = e.ppm
+          this.hidroponik.mode = e.auto
+          this.hidroponik.pompa[0] = e.pompa1
+          this.hidroponik.pompa[1] = e.pompa2
+          this.hidroponik.pompa[2] = e.pompa3
+          this.hidroponik.pompa[3] = e.pompa4
+        })
+      }).subscribe()
+    },
+    async editBlog(blog_id, blog_url){
+      const {data} = await supabase.from('blog').select().match({'blog_id':blog_id})
+      this.loading = true
+      this.loadingStatus = 'fetch data'
+      if(data.length != 0){
+        document.querySelector('.fr-element.fr-view').innerHTML = data[0].data
+        this.blog.title =  data[0].title
+        this.blog.oldtitle = data[0].title
+        this.blog.submit = 'update'
+        this.blog.old_url = blog_url
+        this.blog.blog_id = blog_id
+      }
+      this.loadingStatus = ''
+      this.loading = false
+
+    }
   }
 }
 </script>
@@ -315,7 +321,7 @@ export default{
       <div class="flex items-center">
         <h1 class="mt-2 mx-2">Hidroponik</h1> 
         <!-- refresh button -->
-        <button @click="refresh" class="mt-2 mx-2 border px-3 hover:underline ">refresh</button>
+        <button @click="refresh" class="mt-2 mx-2 border px-3 hover:underline ">{{refreshStatus}}</button>
         
       </div>
       <div class="text-center text-red-600 text-xs" v-if="!hidroponik.ppmvalid">
@@ -339,14 +345,14 @@ export default{
           {{(i)?'aktif':'non aktif'}}
         </div>
         <!-- mode w -->
-        <div @click="hidroponik.mode = !hidroponik.mode" class="rounded-md p-2 m-2 w-36 sm:w-48 text-center bg-lime-600 text-white sm:hover:opacity-60 cursor-pointer">
+        <div @click="(hidroponik.mode = !hidroponik.mode), refreshStatus='async'" class="rounded-md p-2 m-2 w-36 sm:w-48 text-center bg-lime-600 text-white sm:hover:opacity-60 cursor-pointer">
           <span class="underline">mode</span><br>
           {{(hidroponik.mode)?'auto':'manual'}}
         </div>
         <!-- ppm w -->
         <div class="rounded-md p-2 m-2 w-36 sm:w-48 text-center bg-lime-600 text-white cursor-pointer">
           <span class="underline">ppm (0-1500)</span><br>
-          <input type="number" v-model="hidroponik.ppm"  class="bg-lime-600 text-center outline-none border w-24" min="0" max="1500">
+          <input @click="refreshStatus = 'async'" type="number" v-model="hidroponik.ppm"  class="bg-lime-600 text-center outline-none border w-24" min="0" max="1500">
         </div>
 
       </div>
@@ -369,13 +375,13 @@ export default{
     <!-- blog -->
     <div class="m-2" :class="{hidden: !nav[1].active}">
       
-      <form @submit.prevent="submitContent" class="rounded-md shadow-md w-full p-3" >
+      <form @submit.prevent="(blog.submit == 'update')? submitContent('update'):submitContent('')" class="rounded-md shadow-md w-full p-3" >
         
         <!-- blog editor -->
         <div >
         <!-- title -->
         <span class="text-sm text-gray-400 mx-1">title:</span>
-        <input v-model="blog.title" type="text" placeholder="title" class="border px-2 outline-none py-1 w-full mb-2" >
+        <input v-model="blog.title" type="text" placeholder="title" class="border px-2 outline-none py-1 w-full mb-2" ref="titleBlog">
         
         <!-- content -->
         <span class="text-sm text-gray-400 mx-1">content:</span>
@@ -386,7 +392,7 @@ export default{
         <div v-if="blog.postfail" class="italic text-center text-xs text-red-700 mt-2">{{blog.postfail}}</div>
 
         <!-- submit -->
-        <input type="submit" class="bg-green-400 text-white w-full p-1 my-2 hover:underline" value="submit">
+        <input type="submit" class="bg-green-400 text-white w-full p-1 my-2 hover:underline" :value="blog.submit">
         </div>
 
       </form>
@@ -401,6 +407,7 @@ export default{
             <th>release</th>
             <th>views</th>
             <th>delete</th>
+            <th>edit</th>
           </tr>
           <tbody v-for="(i,idx) in blog.list.slice(blog.listIdx, blog.listIdx+blog.lengthlist+1)">
             <tr class="text-sm text-center hover:bg-slate-200">
@@ -409,10 +416,12 @@ export default{
               <td>{{i.release}}</td>
               <td>{{i.views}}</td>
               <td class="p-1 bg-red-600 text-white sm:hover:underline cursor-pointer" @click="removeBlog(i.title, i.link)">delete</td>
+              <td class="p-1 bg-amber-500 text-white sm:hover:underline cursor-pointer" @click="editBlog(i.blog_id, i.link)">edit</td>
             </tr>
           </tbody>
         </table>
       </div>
+
       <!-- pagination -->
       <div class="text-center">
         <button  class="border px-2 mx-2 mb-2 hover:underline" :class="{underline: (blog.listIdx == i-1 )}" @click="blog.listIdx = i - 1" v-for="i in Number((blog.list.length / blog.lengthlist).toFixed())">{{i}}</button>
@@ -432,74 +441,8 @@ export default{
 
     </div>
 
-    <!-- shop -->
-    <div v-if="nav[2].active" class="p-3">
-     
-      <img src="" alt="" ref="imgshop" id="imgshop">
-      <form @submit.prevent="uploadshop" class="p-3 shadow-md rounded-md">
-        <!-- title -->
-        <span class="text-sm">title</span><br>
-        <input v-model="shop.title" type="text" class="border w-full outline-none px-2 p-1">
-        <!-- price -->
-        <span class="text-sm">price</span><br>
-        <input v-model="shop.price" type="text" class="border w-full outline-none px-2 p-1">
-        <!-- image -->
-        <div class="overflow-hidden">
-          <span class="text-sm">upload image</span><br>
-          <input @change="uploadimgshop" ref="imgfileshop" type="file" accept="image/*" class="border w-full outline-none px-2 p-1">
-        </div>
-        <!-- link -->
-        <span class="text-sm">link online shop</span><br>
-        <input v-model="shop.link" type="text" class="border w-full outline-none px-2 p-1">
-        
-        <!-- fail -->
-        <div v-if="shop.fail" class="text-center text-xs italic mt-2">{{shop.fail}}</div>
-
-        <!-- submit -->
-        <input type="submit" value="submit" class="w-full outline-none bg-green-400 text-white p-1 my-2 hover:underline">
-      </form>
-
-      <div class="overflow-x-scroll my-4 py-1">
-        <table class="w-full">
-            <tr>
-              <th class="sm:w-10">id</th>              
-              <th>name</th>
-              <th>price</th>
-              <th>image</th>
-              <th>delete</th>
-            </tr>
-            <tbody v-for="i,idx in shop.list.slice(shop.listIdx, shop.listIdx+shop.lengthlist+1)">
-              <tr class="text-sm hover:bg-slate-200 text-center">
-                <td>{{idx + 1 + blog.listIdx}}</td>
-                <td><a :href="i.url">{{i.name}}</a></td>
-                <td>{{i.price}}</td>
-                <td><img :src="i.img_url" alt="" class="w-20"></td>
-                <td class="p-1 bg-red-600 text-white sm:hover:underline cursor-pointer" @click="removeShop(i.name)">delete</td>
-              </tr>
-            </tbody>
-        </table>
-      </div>
-
-      <!-- pagination -->
-      <div class="text-center">
-        <button  class="border px-2 mx-2 mb-2 hover:underline" :class="{underline: (shop.listIdx == i-1 )}" @click="shop.listIdx = i - 1" v-for="i in Number((shop.list.length / shop.lengthlist).toFixed())">{{i}}</button>
-      </div>
-
-      <!-- modal delete -->
-      <Modal class="fixed w-full h-full z-10 bg-opacity-90" :class="{hidden: !shop.deleteModal}">
-        <div class="text-center text-gray-500 text-sm">
-          confirm delete <br>{{shop.deleteProduct}}
-          <div class="text-white mt-4">
-            <button class="mr-5 sm:hover:underline px-6 py-1 bg-red-600" @click="removeShop(null)">yes</button>
-            <button class="ml-5 sm:hover:underline px-6 py-1 bg-sky-600" @click="shop.deleteModal = !shop.deleteModal">no</button>
-          </div>
-        </div>
-      </Modal>
-
-    </div>
-
     <!-- comment -->
-    <div v-if="nav[3].active" class="px-3 py-1">
+    <div v-if="nav[2].active" class="px-3 py-1">
       <h1>Comment:</h1>
       <div class="overflow-x-scroll mt-1 mb-4 py-1">
         <table class="w-full" >

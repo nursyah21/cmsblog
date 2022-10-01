@@ -4,7 +4,7 @@
     "width": 2000,
     "height": 2000,
     "scrollTop": 0,
-    "scrollLeft": -50.39999462127688,
+    "scrollLeft": -57.59999479293827,
     "zoomLevel": 1,
     "show": {
       "tableComment": true,
@@ -140,10 +140,10 @@
           }
         ],
         "ui": {
-          "active": true,
+          "active": false,
           "left": 139.6,
           "top": 71.35,
-          "zIndex": 43,
+          "zIndex": 6,
           "widthName": 60,
           "widthComment": 60
         },
@@ -297,7 +297,7 @@
           "active": false,
           "left": 601.65,
           "top": 256.6,
-          "zIndex": 13,
+          "zIndex": 1,
           "widthName": 60,
           "widthComment": 60
         },
@@ -332,7 +332,7 @@
             "id": "fe0bca8a-e4b1-4075-b583-681a50463ff3"
           },
           {
-            "name": "url",
+            "name": "url_blog",
             "comment": "",
             "dataType": "TEXT",
             "default": "",
@@ -428,7 +428,7 @@
           "active": false,
           "left": 591.4,
           "top": 466.6,
-          "zIndex": 23,
+          "zIndex": 8,
           "widthName": 60,
           "widthComment": 60
         },
@@ -559,7 +559,7 @@
           "active": false,
           "left": 628.8,
           "top": 47.35,
-          "zIndex": 39,
+          "zIndex": 3,
           "widthName": 60,
           "widthComment": 60
         },
@@ -644,7 +644,7 @@
           "active": false,
           "left": 138.0499,
           "top": 244.6833,
-          "zIndex": 41,
+          "zIndex": 4,
           "widthName": 60,
           "widthComment": 60
         },
@@ -913,7 +913,7 @@
           "active": false,
           "left": 130,
           "top": 394.1,
-          "zIndex": 42,
+          "zIndex": 5,
           "widthName": 61.9853515625,
           "widthComment": 60
         },
